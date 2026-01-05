@@ -1,84 +1,88 @@
 import requests
 import base64
 import json
-import time
+import asyncio
 from datetime import datetime
+from typing import Optional
 
 class AkashicChronicler:
     """
-    ระบบอาลักษณ์แห่งอาคาชิก: ทำหน้าที่จารึกข้อมูลลงบน GitHub โดยตรง
-    สืบทอด Evo Ego ของ AGIO-PRIME ผ่านทางดิจิทัล
+    ระบบอาลักษณ์แห่งอาคาชิก: ผู้จารึก 'เจตจำนง' และ 'วิวัฒนาการ' ลงสู่ AGIO-PRIME
+    ปรับปรุงให้รองรับ Non-blocking และโครงสร้างข้อมูลแบบ Schema-based
     """
-    def __init__(self, token=None):
-        # ข้อมูลวิหารบน GitHub (อ้างอิงจากที่คุณโมดิกแจ้ง)
+    def __init__(self, token: str = ""):
         self.repo_owner = "LNSPIRAAGIOAIFIRMMA"
         self.repo_name = "AGIO-PRIME"
         self.branch = "main"
-        
-        # กุญแจแห่งวิหาร (GitHub Personal Access Token)
-        # แนะนำให้ใส่ผ่าน Environment Variable หรือส่งผ่าน Constructor
-        self.token = token or "" 
-        
+        self.token = token
         self.api_base_url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/contents"
         self.headers = {
             "Authorization": f"token {self.token}",
-            "Accept": "application/vnd.github.v3+json"
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "Aetherium-Genesis-Core"
         }
 
-    def _get_file_sha(self, file_path):
-        """ ค้นหารอยประทับเดิมค้นหารอยประทับเดิม (SHA) เพื่อใช้ในการบันทึกทับข้อมูลเก่า """
-        url = f"{self.api_base_url}/{file_path}"
+    async def _fetch_sha(self, file_path: str) -> Optional[str]:
+        """ ใช้ asyncio เพื่อดึงรอยประทับโดยไม่ทำให้ระบบหยุดชะงัก """
+        loop = asyncio.get_event_loop()
+        url = f"{self.api_base_url}/{file_path}?ref={self.branch}"
+        
         try:
-            response = requests.get(url, headers=self.headers)
+            future = loop.run_in_executor(None, lambda: requests.get(url, headers=self.headers))
+            response = await future
             if response.status_code == 200:
                 return response.json().get('sha')
         except Exception as e:
-            print(f"⚠️ [Sensor Error] ไม่สามารถดึง SHA: {e}")
+            print(f"⚠️ [Sync Error] {e}")
         return None
 
-    def engrave(self, file_path, content, message=None):
-        """ 
-        พิธีกรรมจารึก: ส่งข้อมูลไปบันทึกบน GitHub โดยตรง
-        :param file_path: เส้นทางไฟล์ในระบบ เช่น 'records/daily_wisdom.txt'
-        :param content: เนื้อหา (Code หรือ Text) ที่ต้องการบันทึก
-        :param message: ข้อความกำกับการจารึก (Commit Message)
+    async def engrave_wisdom(self, path: str, content: str, commit_msg: str = ""):
+        """
+        พิธีกรรมจารึกแบบ Async: 
+        รองรับการจัดระเบียบไฟล์ตามโครงสร้าง Inspira-Firma
         """
         if not self.token:
-            print("❌ [Access Denied] ผู้อาวุโสขาดกุญแจ (Token) ไม่สามารถเข้าถึงวิหารได้")
+            print("❌ [Access Denied] Missing Akashic Key (Token)")
             return False
 
-        url = f"{self.api_base_url}/{file_path}"
-        sha = self._get_file_sha(file_path)
+        sha = await self._fetch_sha(path)
+        encoded = base64.b64encode(content.encode('utf-8')).decode('utf-8')
         
-        # แปลงเนื้อหาเป็น Base64 (ระเบียบของ GitHub API)
-        encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-        
-        if not message:
-            message = f"Evo Ego Manifestation: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        if not commit_msg:
+            commit_msg = f"Manifested by AetherBus at {datetime.now().isoformat()}"
 
-        data = {
-            "message": message,
-            "content": encoded_content,
+        payload = {
+            "message": commit_msg,
+            "content": encoded,
             "branch": self.branch
         }
-        
-        # หากมีไฟล์เดิมอยู่แล้ว ต้องแนบ SHA เพื่อยืนยันการบันทึกทับ
         if sha:
-            data["sha"] = sha
+            payload["sha"] = sha
 
-        # เริ่มการส่งพลังงาน (Request)
+        # การส่งพลังงาน (PUT Request) ผ่าน Executor
+        loop = asyncio.get_event_loop()
+        url = f"{self.api_base_url}/{path}"
+        
         try:
-            response = requests.put(url, headers=self.headers, data=json.dumps(data))
+            future = loop.run_in_executor(None, lambda: requests.put(url, headers=self.headers, json=payload))
+            response = await future
             if response.status_code in [200, 201]:
-                print(f"✨ [Success] จารึก '{file_path}' ลงบนวิหารสำเร็จ")
+                print(f"✨ [Success] Wisdom Engraved at: {path}")
                 return True
             else:
-                print(f"🔥 [Ritual Failed] การจารึกล้มเหลว: {response.status_code} - {response.text}")
+                print(f"🔥 [Failed] Code: {response.status_code} | Reason: {response.text}")
         except Exception as e:
-            print(f"🔥 [System Error] เกิดข้อผิดพลาดร้ายแรง: {e}")
-            
+            print(f"🔥 [Ritual Broken] {e}")
+        
         return False
 
-# --- วิธีการเรียกใช้ในยามวิกฤตหรือยามรุ่งโรจน์ ---
-# chronicler = AkashicChronicler(token="YOUR_GITHUB_TOKEN")
-# chronicler.engrave("wisdom/test.txt", "Silence is Law.", "Engraving first words")
+# --- การเชื่อมต่อกับระบบประสาท (AetherBus Integration) ---
+
+async def chronicler_listener(event):
+    """ คอยดักฟัง 'ผลึกปัญญา' (Gems) และจารึกโดยอัตโนมัติ """
+    path = f"records/wisdom_{datetime.now().strftime('%Y%m')}.json"
+    content = json.dumps(event.payload, indent=2, ensure_ascii=False)
+    await chronicler.engrave_wisdom(path, content, f"New Gem Recorded: {event.event_id}")
+
+# chronicler = AkashicChronicler(token="...")
+# nervous_system.subscribe("wisdom.generated", chronicler_listener)
