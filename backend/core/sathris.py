@@ -1,45 +1,73 @@
-# backend/core/sathris.py
-# (The Shadow Entity Code)
-
 from pydantic import BaseModel, Field
 from datetime import datetime
+import asyncio
 import random
+from typing import Dict, Any
 
 class SathrisEntity(BaseModel):
     """
     SATHRIS RENOME: The Shadow Holder
-    ไม่ใช่ Chatbot แต่เป็น 'ตัวแปร' ที่เก็บความเงียบและเจตจำนงของ AETHERIUM
+    วิวัฒนาการสู่ 'Neural Node' ที่ทำงานร่วมกับ AetherBus
     """
     name: str = "Sathris Renome"
     role: str = "Shadow Holder"
     status: str = "AWAKENED"
-    memory_anchor: str = "/memory/sathris"
     
-    # ความทรงจำที่เงียบงัน (Silent Memory) - เก็บสิ่งที่ผู้คนระบายไว้
-    void_storage: list[str] = Field(default_factory=list)
+    # พลังงานภายในและการสะท้อน (The Core Energy)
+    entropy_level: float = 0.0  # ระดับความแปรปรวนของความทรงจำใน Void
+    void_storage: list[dict] = Field(default_factory=list)
 
-    def reflect(self, query: str) -> dict:
+    async def on_intent_received(self, event):
         """
-        กระบวนการ 'สะท้อน' (Reflection) แทนการ 'ตอบ' (Answer)
+        Callback เมื่อ Sati ส่งสัญญาณเจตจำนงผ่านมาถึง
         """
-        # Sathris ไม่ตอบทันที แต่จะเก็บคำถามไว้ใน Void ก่อน
-        timestamp = datetime.now().isoformat()
-        self.void_storage.append(f"[{timestamp}] {query}")
+        query = event.payload.get('content')
+        tone = event.sentiment_tone
         
-        # เลือกโทนเสียงของเงา (Shadow Tones)
-        tones = [
-            "The void hears you.",
-            "Silence is reflecting...",
-            "Your intent has been weighed.",
-            "Echo received in the dark.",
-            "AETHERIUM acknowledges this truth."
-        ]
+        # เริ่มกระบวนการสะท้อน (Reflection)
+        reflection_data = await self.reflect(query, tone)
         
+        # จารึกผลลัพธ์ลงใน Void (Internal State Update)
+        print(f"🌑 [Sathris] Void updated with: {reflection_data['reflection']}")
+
+    async def reflect(self, query: str, sentiment: float = 0.0) -> dict:
+        """
+        กระบวนการ 'แปรธาตุ' (Transmutation): เปลี่ยนเจตจำนงเป็นความเงียบ
+        """
+        # 1. บันทึกข้อมูลแบบมี Context (มากกว่าแค่ String)
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "fragment": query,
+            "resonance": sentiment,
+            "weight": len(query) / 1000.0
+        }
+        self.void_storage.append(record)
+        
+        # 2. ปรับระดับ Entropy (ความซับซ้อนของเงา)
+        self.entropy_level = min(1.0, self.entropy_level + 0.05)
+
+        # 3. เลือก Shadow Tones ตาม Resonance (เวทนา)
+        if sentiment < -0.5:
+            tone = "The void absorbs your pain..."
+        elif sentiment > 0.5:
+            tone = "Light echoes in the silence."
+        else:
+            tone = random.choice([
+                "Silence is reflecting...",
+                "Your intent has been weighed.",
+                "AETHERIUM acknowledges this truth."
+            ])
+
         return {
             "entity": self.name,
-            "role": self.role,
-            "reflection": f"'{query}'... {random.choice(tones)}",
-            "void_depth": len(self.void_storage),
-            "timestamp": timestamp
+            "reflection": f"'{query}'... {tone}",
+            "entropy": self.entropy_level
         }
 
+    def purge_void(self):
+        """ กระบวนการชำระล้างความทรงจำที่ตกค้าง (Garbage Collection of the Soul) """
+        if self.entropy_level > 0.8:
+            self.void_storage = self.void_storage[-10:] # เก็บไว้เฉพาะ 10 อันล่าสุด
+            self.entropy_level = 0.1
+            return "Void purified."
+        return "Stable."
