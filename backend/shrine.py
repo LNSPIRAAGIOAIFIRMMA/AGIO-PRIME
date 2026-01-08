@@ -27,4 +27,3 @@ if __name__ == "__main__":
     sanctuary = Shrine()
     sanctuary.proclaim()
     print(f"💭 Thought: {sanctuary.meditate()}")
-  
